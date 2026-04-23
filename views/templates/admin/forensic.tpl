@@ -53,7 +53,7 @@
                         <i class="icon-warning-sign"></i>
                         {l s='POTENTIAL EXPLOITATION DETECTED' mod='tecno_xss_hotfix'}
                         &mdash;
-                        {$scan_results.total_hits} {l s='suspicious record(s) found' mod='tecno_xss_hotfix'}
+                        {$scan_results.total_hits|intval} {l s='suspicious record(s) found' mod='tecno_xss_hotfix'}
                     </h4>
                     <p>{l s='Review the tables below and follow the remediation steps at the bottom of this page.' mod='tecno_xss_hotfix'}</p>
                     <p>
@@ -100,7 +100,7 @@
                     {assign var='panel_class' value='success'}
                 {/if}
 
-                <div class="panel panel-{$panel_class}" style="margin-top:16px">
+                <div class="panel panel-{$panel_class|escape:'html':'UTF-8'}" style="margin-top:16px">
                     <div class="panel-heading">
                         {if $has_error}
                             <i class="icon-exclamation-circle"></i>
@@ -113,9 +113,9 @@
                         {/if}
                         {$section.label|escape:'html':'UTF-8'}
                         {if !$is_info}
-                            &nbsp;<span class="badge">{$row_count}</span>
+                            &nbsp;<span class="badge">{$row_count|intval}</span>
                         {else}
-                            &nbsp;<span class="badge">{$row_count} {l s='accounts' mod='tecno_xss_hotfix'}</span>
+                            &nbsp;<span class="badge">{$row_count|intval} {l s='accounts' mod='tecno_xss_hotfix'}</span>
                         {/if}
                     </div>
 
