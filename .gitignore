@@ -1,0 +1,10 @@
+# Build output
+/dist/
+
+# IDE / Editor
+.idea/
+.vscode/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

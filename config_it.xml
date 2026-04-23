@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>tecno_xss_hotfix</name>
+    <displayName><![CDATA[XSS Hotfix GHSA-w9f3-qc75-qgx9]]></displayName>
+    <version><![CDATA[1.0.0]]></version>
+    <description><![CDATA[Security patch for stored XSS in Customer Threads BO (CVE 9.3/10, CWE-79)]]></description>
+    <author><![CDATA[Tecnoacquisti.com]]></author>
+    <tab><![CDATA[administration]]></tab>
+    <is_configurable>1</is_configurable>
+    <need_instance>0</need_instance>
+</module>
