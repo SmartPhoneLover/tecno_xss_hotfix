@@ -183,10 +183,15 @@ class Tecno_Xss_Hotfix extends Module
         $vulnerable = $isOld ? self::VALIDATE_VULNERABLE_17 : self::VALIDATE_VULNERABLE;
         $patched    = $isOld ? self::VALIDATE_PATCHED_17    : self::VALIDATE_PATCHED;
 
+        // PS 1.7 (only): VALIDATE_PATCHED_17 contains VALIDATE_VULNERABLE_17, so strpos() would always return true even after the first patch.
+        if ($isOld && strpos($content, self::VALIDATE_PATCHED_17_SENTINEL) !== false) {
+            return ['status' => 'already_patched', 'message' => $this->l('Validate.php already patched.')];
+        }
+
         if (strpos($content, $vulnerable) === false) {
             return ['status' => 'already_patched', 'message' => $this->l('Validate.php: token not found (already patched or different PS version).')];
         }
-
+        
         $backupPath = $path . self::BACKUP_SUFFIX;
         if (!copy($path, $backupPath)) {
             return ['status' => 'error', 'message' => sprintf($this->l('Cannot create backup: %s'), $backupPath)];
