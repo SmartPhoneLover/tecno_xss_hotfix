@@ -7,7 +7,7 @@ Security hotfix module for PrestaShop — patches stored XSS vulnerability [GHSA
 | **Severity** | Critical — CVSS 9.3 / 10 |
 | **Type** | Stored XSS (CWE-79) |
 | **Vector** | Customer email field → Back-Office Customer Threads view |
-| **Affected** | PS 1.7.x, PS 8.x < 8.2.6, PS 9.x < 9.1.1 |
+| **Affected** | PS 1.6.x, 1.7.x, PS 8.x < 8.2.6, PS 9.x < 9.1.1 |
 | **Author** | [Tecnoacquisti.com](https://www.tecnoacquisti.com) |
 
 ---
@@ -30,6 +30,7 @@ When a Back-Office administrator opens the **Customer Threads** page, the email 
 2. `classes/Validate.php` — `isEmail()` accepts email addresses containing `<`, `>` and `"`:
    - PS ≥ 8.0.2: regex uses `'mode' => 'loose'` (allows quoted strings)
    - PS 1.7: `egulias/email-validator` with `RFCValidation` (RFC 5321 quoted local-parts)
+   - Before PS 1.7.7.0-beta.1 `preg_match` with regex
 
 ---
 
@@ -39,7 +40,7 @@ When a Back-Office administrator opens the **Customer Threads** page, the email 
 
 | Target | Action |
 |--------|--------|
-| `{admin}/themes/default/template/…/view.tpl` | Adds `\|escape:'html':'UTF-8'` to `{$thread->email}` |
+| `{admin}/themes/default/template/controllers/customer_threads/helpers/view/view.tpl` | Adds `\|escape:'html':'UTF-8'` to `{$thread->email}` |
 | `classes/Validate.php` (PS ≥ 8.0.2, no override) | Changes `'mode' => 'loose'` → `'mode' => 'strict'` |
 | `classes/Validate.php` (PS 1.7, no override) | Injects `preg_match('/[<>"]/', $email)` guard before the `EmailValidator` call |
 
@@ -63,6 +64,7 @@ If hits are found, guided remediation steps are shown inline.
 
 | PrestaShop | PHP | Status |
 |------------|-----|--------|
+| 1.6.0.9+ | Supported |
 | 1.7.x | 7.2 – 8.x | Supported |
 | 8.0 – 8.2.5 | 8.1+ | Supported |
 | 9.0 – 9.1.0 | 8.1+ | Supported |
@@ -74,7 +76,7 @@ If hits are found, guided remediation steps are shown inline.
 
 1. Upload the `tecno_xss_hotfix` directory to `{shop}/modules/`
 2. Install from **Back-Office > Modules > Module Manager**
-3. Patches are applied automatically on install
+3. To prevent possible errors with non-compatible shop versions the patch/re-patch must be applied manually on first launch.
 4. Verify the green status badges on the module configuration page
 
 To re-apply (e.g. after a PS core update that overwrote `Validate.php`):  
