@@ -8,6 +8,7 @@ $_MODULE['<{tecno_xss_hotfix}prestashop>tecno_xss_hotfix_d144f17c95431dddefef516
 $_MODULE['<{tecno_xss_hotfix}prestashop>tecno_xss_hotfix_3d43ac4696019b1f1061c573cc7ae5e4'] = 'File not found: %s';
 $_MODULE['<{tecno_xss_hotfix}prestashop>tecno_xss_hotfix_a5ca752abcdbc44f49aa95a30938afd0'] = 'File not writable: %s';
 $_MODULE['<{tecno_xss_hotfix}prestashop>tecno_xss_hotfix_b433e8c5d1576d4de5c6281c99dd82d8'] = 'Cannot read: %s';
+$_MODULE['<{tecno_xss_hotfix}prestashop>tecno_xss_hotfix_a3c3e87e1d3a9975740aa3fc77341aa1'] = 'Template already patched.';
 $_MODULE['<{tecno_xss_hotfix}prestashop>tecno_xss_hotfix_cc7c4469829e407aaa254fb553c7aee8'] = 'Template: vulnerable token not found (already patched or different PS version).';
 $_MODULE['<{tecno_xss_hotfix}prestashop>tecno_xss_hotfix_ceeceafe20074b78cb4ceb1a8899396e'] = 'Cannot create backup: %s';
 $_MODULE['<{tecno_xss_hotfix}prestashop>tecno_xss_hotfix_b050994fb4c4254d3c1f613029281d12'] = 'Cannot write patched file: %s';
