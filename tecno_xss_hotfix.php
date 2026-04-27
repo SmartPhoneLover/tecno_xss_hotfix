@@ -16,18 +16,23 @@ if (!defined('_PS_VERSION_')) {
 
 class Tecno_Xss_Hotfix extends Module
 {
-    // Smarty token: closing brace is part of the tag, so these two strings do NOT overlap
-    const VULNERABLE_TOKEN = '{$thread->email}';
-    const PATCHED_TOKEN    = '{$thread->email|escape:\'html\':\'UTF-8\'}';
+	const VULNERABLE_TOKEN = '{' . '$thread->email}';
+	const PATCHED_TOKEN = '{' . '$thread->email|escape:\'html\':\'UTF-8\'}';
 
     // Validate.php isEmail() — PS >= 8.0.2: regex mode flag
     const VALIDATE_VULNERABLE = "'mode' => 'loose',";
     const VALIDATE_PATCHED    = "'mode' => 'strict',";
 
-    // Validate.php isEmail() — PS 1.7 (egulias EmailValidator): inject guard before return
+    // Validate.php isEmail() — PS >= 1.7.7.0-beta.1 (egulias EmailValidator): inject guard before return
     const VALIDATE_VULNERABLE_17 = 'return !empty($email) && (new EmailValidator())->isValid(';
     const VALIDATE_PATCHED_17    = "if (!empty(\$email) && preg_match('/[<>\"]/', \$email)) { return false; }\n        return !empty(\$email) && (new EmailValidator())->isValid(";
     const VALIDATE_PATCHED_17_SENTINEL = "preg_match('/[<>\"]/', \$email)";
+
+    // Validate.php isEmail() - PS 1.6.0.9 – 1.7.6.9 (preg_match):
+    // The function returns the preg_match result directly; inject guard before it.
+    const VALIDATE_VULNERABLE_16 = 'return !empty($email) && preg_match(Tools::cleanNonUnicodeSupport(';
+    const VALIDATE_PATCHED_16 = "if (!empty(\$email) && preg_match('/[<>\"]/u', \$email)) { return false; }\n        return !empty(\$email) && preg_match(Tools::cleanNonUnicodeSupport(";
+    const VALIDATE_PATCHED_16_SENTINEL = "preg_match('/[<>\"]/u', \$email)";
 
     const BACKUP_SUFFIX = '.tecno-hotfix-backup';
 
@@ -44,7 +49,7 @@ class Tecno_Xss_Hotfix extends Module
 
         $this->displayName = $this->l('XSS Hotfix GHSA-w9f3-qc75-qgx9');
         $this->description = $this->l('Security patch for stored XSS in Customer Threads BO (CVE 9.3/10, CWE-79)');
-        $this->ps_versions_compliancy = ['min' => '1.7.0.0', 'max' => '9.99.99'];
+        $this->ps_versions_compliancy = ['min' => '1.6.0.9', 'max' => '9.99.99'];
     }
 
     public function install()
@@ -52,7 +57,8 @@ class Tecno_Xss_Hotfix extends Module
         if (!parent::install()) {
             return false;
         }
-        $this->applyPatches();
+        // Uncomment to apply patches during installation automatically
+        // $this->applyPatches();
         return true;
     }
 
@@ -130,10 +136,15 @@ class Tecno_Xss_Hotfix extends Module
         }
 
         // Already patched or different version — both are safe states
-        if (strpos($content, self::VULNERABLE_TOKEN) === false) {
+		$hasPatched = strpos($content, self::PATCHED_TOKEN) !== false;
+		$hasVulnerable = strpos($content, self::VULNERABLE_TOKEN) !== false;
+        if ($hasPatched && !$hasVulnerable) {
+            return ['status' => 'already_patched', 'message' => $this->l('Template already patched.')];
+        }
+        if (!$hasVulnerable) {
             return ['status' => 'already_patched', 'message' => $this->l('Template: vulnerable token not found (already patched or different PS version).')];
         }
-
+        
         $backupPath = $path . self::BACKUP_SUFFIX;
         if (!copy($path, $backupPath)) {
             return ['status' => 'error', 'message' => sprintf($this->l('Cannot create backup: %s'), $backupPath)];
@@ -148,7 +159,44 @@ class Tecno_Xss_Hotfix extends Module
     }
 
     /**
-     * Patch Validate.php isEmail() regex mode: loose → strict.
+     * Detect which isEmail() variant is present in Validate.php and return the corresponding value (vulnerable, patched, sentinel),
+     * or null when the PS version is >= 8.0.2 (handled by a separate branch).
+     *
+     * Variants for PS < 8.0.2:
+     * - PS 1.7.7.0-beta.1 and up: egulias EmailValidator  (VALIDATE_VULNERABLE_17)
+     * - PS 1.6.0.9 - 1.7.6.9: native preg_match (VALIDATE_VULNERABLE_16)
+     *
+     * @return array|null  ['vulnerable/patched/sentinel'=>string] or null if unknown old PS variant is detected.
+     */
+    protected function detectOldPsVariant($content)
+    {
+        // egulias path (PS 1.7.7.0-beta.1 and up)
+        if (strpos($content, self::VALIDATE_VULNERABLE_17) !== false) {
+            return [
+                'vulnerable' => self::VALIDATE_VULNERABLE_17,
+                'patched' => self::VALIDATE_PATCHED_17,
+                'sentinel' => self::VALIDATE_PATCHED_17_SENTINEL,
+            ];
+        }
+        
+        // preg_match path (PS 1.6.0.9 – 1.7.6.9)
+        if (strpos($content, self::VALIDATE_VULNERABLE_16) !== false) {
+            return [
+                'vulnerable' => self::VALIDATE_VULNERABLE_16,
+                'patched' => self::VALIDATE_PATCHED_16,
+                'sentinel' => self::VALIDATE_PATCHED_16_SENTINEL,
+            ];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Patch Validate.php isEmail():
+     *  - PS >= 8.0.2: flip 'mode' => 'loose' to 'strict'
+     *  - PS 1.7.7.0-beta.1 and up: inject XSS guard before egulias EmailValidator
+     *  - PS 1.6.0.9 - 1.7.6.9: inject XSS guard before preg_match return
+     *
      * Only executed for PS >= 8.0.2 AND when no isEmail() override exists.
      *
      * @return array{status:string, message:string}
@@ -180,13 +228,39 @@ class Tecno_Xss_Hotfix extends Module
         }
 
         $isOld = version_compare(_PS_VERSION_, '8.0.2', '<');
-        $vulnerable = $isOld ? self::VALIDATE_VULNERABLE_17 : self::VALIDATE_VULNERABLE;
-        $patched    = $isOld ? self::VALIDATE_PATCHED_17    : self::VALIDATE_PATCHED;
-
-        if (strpos($content, $vulnerable) === false) {
-            return ['status' => 'already_patched', 'message' => $this->l('Validate.php: token not found (already patched or different PS version).')];
+        if (!$isOld) {
+            // PS >= 8.0.2 - flip mode flag
+            if (strpos($content, self::VALIDATE_PATCHED) !== false) {
+                return ['status' => 'already_patched', 'message' => $this->l('Validate.php already patched.')];
+            }
+            if (strpos($content, self::VALIDATE_VULNERABLE) === false) {
+                return ['status' => 'already_patched', 'message' => $this->l('Validate.php: token not found (already patched or different PS version).')];
+            }
+            $vulnerable = self::VALIDATE_VULNERABLE;
+            $patched = self::VALIDATE_PATCHED;
+        } else {
+            // PS 1.6.0.9 and up - detect variant then inject guard
+            $variant = $this->detectOldPsVariant($content);
+            
+            // Already patched? Both sentinels cover their respective variants.
+            if (
+                strpos($content, self::VALIDATE_PATCHED_17_SENTINEL) !== false
+                || strpos($content, self::VALIDATE_PATCHED_16_SENTINEL) !== false
+            ) {
+                return ['status' => 'already_patched', 'message' => $this->l('Validate.php already patched.')];
+            }
+            
+            if ($variant === null) {
+                return [
+                    'status' => 'unknown',
+                    'message' => $this->l('Validate.php: no known isEmail() signature found. File may use a custom implementation, apply the fix manually.'),
+                ];
+            }
+            
+            $vulnerable = $variant['vulnerable'];
+            $patched = $variant['patched'];
         }
-
+        
         $backupPath = $path . self::BACKUP_SUFFIX;
         if (!copy($path, $backupPath)) {
             return ['status' => 'error', 'message' => sprintf($this->l('Cannot create backup: %s'), $backupPath)];
@@ -237,10 +311,12 @@ class Tecno_Xss_Hotfix extends Module
         if ($content === false) {
             return ['status' => 'error', 'message' => sprintf($this->l('Cannot read: %s'), $path)];
         }
-        if (strpos($content, self::PATCHED_TOKEN) !== false) {
+		$hasPatched = strpos($content, self::PATCHED_TOKEN) !== false;
+		$hasVulnerable  = strpos($content, self::VULNERABLE_TOKEN) !== false;
+        if ($hasPatched && !$hasVulnerable) {
             return ['status' => 'patched', 'message' => $this->l('Template patched correctly.')];
         }
-        if (strpos($content, self::VULNERABLE_TOKEN) !== false) {
+        if ($hasVulnerable) {
             return ['status' => 'vulnerable', 'message' => $this->l('Template is VULNERABLE — patch not yet applied!')];
         }
         return ['status' => 'unknown', 'message' => $this->l('Template: cannot determine status (tokens not found in file).')];
@@ -262,11 +338,18 @@ class Tecno_Xss_Hotfix extends Module
         $isOld = version_compare(_PS_VERSION_, '8.0.2', '<');
         if ($isOld) {
             if (strpos($content, self::VALIDATE_PATCHED_17_SENTINEL) !== false) {
-                return ['status' => 'patched', 'message' => $this->l('Validate.php patched correctly (PS 1.7 guard injected).')];
+                return ['status' => 'patched', 'message' => $this->l('Validate.php patched correctly (PS 1.7.7.0+ egulias guard injected).')];
+            }
+            if (strpos($content, self::VALIDATE_PATCHED_16_SENTINEL) !== false) {
+                return ['status' => 'patched', 'message' => $this->l('Validate.php patched correctly (PS 1.6.0.9 - 1.7.6.9 preg_match guard injected).')];
             }
             if (strpos($content, self::VALIDATE_VULNERABLE_17) !== false) {
                 return ['status' => 'vulnerable', 'message' => $this->l('Validate.php is VULNERABLE — patch not yet applied!')];
             }
+            if (strpos($content, self::VALIDATE_VULNERABLE_16) !== false) {
+                return ['status' => 'vulnerable', 'message' => $this->l('Validate.php is VULNERABLE — patch not yet applied! (PS 1.6.0.9 - 1.7.6.9 preg_match path)')];
+            }
+            return ['status' => 'unknown', 'message' => $this->l('Validate.php: no known isEmail() signature found. File may use a custom implementation, check manually.')];
         } else {
             if (strpos($content, self::VALIDATE_PATCHED) !== false) {
                 return ['status' => 'patched', 'message' => $this->l('Validate.php patched correctly.')];
